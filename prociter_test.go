@@ -22,6 +22,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
 	. "github.com/onsi/gomega/gleak"
 	. "github.com/thediveo/success"
 )
@@ -34,6 +35,8 @@ var _ = Describe("beesy eBPF", func() {
 		if os.Getuid() != 0 {
 			Skip("needs root")
 		}
+
+		format.MaxLength = 8192
 
 		Expect(loadBeesyObjects(&objs, nil)).To(Succeed())
 		DeferCleanup(func() {
@@ -65,14 +68,17 @@ var _ = Describe("beesy eBPF", func() {
 
 		count := 0
 		for {
-			var pStatus beesyProcstatus
-			n, err := f.Read(unsafe.Slice((*byte)(unsafe.Pointer(&pStatus)), unsafe.Sizeof(pStatus)))
+			var taskStatus beesyProcstatus
+			n, err := f.Read(unsafe.Slice((*byte)(unsafe.Pointer(&taskStatus)), unsafe.Sizeof(taskStatus)))
 			if n == 0 {
 				break
 			}
 			Expect(err).NotTo(HaveOccurred())
-			Expect(pStatus.Pid).NotTo(BeZero())
-			Expect(pStatus.Tid).NotTo(BeZero())
+			Expect(taskStatus.Pid).NotTo(BeZero())
+			Expect(taskStatus.Tid).NotTo(BeZero())
+			name := string(unsafe.Slice((*byte)(unsafe.Pointer(&taskStatus.Name)), unsafe.Sizeof(taskStatus.Name)))
+			Expect(name).NotTo(BeEmpty())
+			println(name)
 			count++
 		}
 		Expect(count).NotTo(BeZero())

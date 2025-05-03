@@ -7,6 +7,7 @@ LIBBPF_VERSION=1.5.0
 prefix=libbpf-"$LIBBPF_VERSION"
 headers=(
     "$prefix"/LICENSE.BSD-2-Clause
+    "$prefix"/src/bpf_core_read.h
     "$prefix"/src/bpf_endian.h
     "$prefix"/src/bpf_helper_defs.h
     "$prefix"/src/bpf_helpers.h
