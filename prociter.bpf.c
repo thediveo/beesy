@@ -41,11 +41,16 @@ struct procstatus {
     int tid;
 };
 
+const struct procstatus _meh __attribute__((unused)); // force emitting struct procstatus
+
 SEC("iter/task")
 int dump_task_status(struct bpf_iter__task *ctx)
 {
     struct seq_file *m = ctx->meta->seq;
     struct task_struct *task = ctx->task;
+    if (task == NULL) {
+        return 0;
+    }
 
     struct procstatus stat;
     
@@ -54,5 +59,7 @@ int dump_task_status(struct bpf_iter__task *ctx)
     stat.tid = task->pid,   // user-space TID <=> kernel-space pid
     bpf_rcu_read_unlock();
 
-    return bpf_seq_write(m, &stat, sizeof(stat));
+    bpf_seq_write(m, &stat, sizeof(stat));
+
+    return 0;
 }
