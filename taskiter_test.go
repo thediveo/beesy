@@ -15,11 +15,8 @@
 package beesy
 
 import (
-	"bytes"
-	"fmt"
 	"os"
 	"time"
-	"unsafe"
 
 	"github.com/onsi/gomega/format"
 
@@ -60,40 +57,39 @@ var _ = Describe("beesy eBPF", func() {
 		defer it.Close()
 	})
 
+	It("returns full kthread names", func() {
+		it := Successful(link.AttachIter(link.IterOptions{
+			Program: objs.DumpTaskStatus,
+		}))
+		defer it.Close()
+
+		numKthreads := 0
+		maxNameLen := 0
+		for taskStatus := range allTasks(it) {
+			if taskStatus.Ppid != 2 {
+				continue
+			}
+			numKthreads++
+			maxNameLen = max(maxNameLen, len(taskStatus.Name()))
+		}
+		Expect(numKthreads).NotTo(BeZero(), "no kthreads seen")
+		Expect(maxNameLen).To(BeNumerically(">", 15))
+	})
+
 	It("iterates", func() {
 		it := Successful(link.AttachIter(link.IterOptions{
 			Program: objs.DumpTaskStatus,
 		}))
 		defer it.Close()
 
-		f := Successful(it.Open())
-		defer f.Close()
-
 		count := 0
-		for {
-			var taskStatus beesyProcstatus
-			n, err := f.Read(unsafe.Slice((*byte)(unsafe.Pointer(&taskStatus)), unsafe.Sizeof(taskStatus)))
-			if n == 0 {
-				break
-			}
-			Expect(err).NotTo(HaveOccurred())
+		for taskStatus := range allTasks(it) {
 			Expect(taskStatus.Pid).NotTo(BeZero())
 			Expect(taskStatus.Tid).NotTo(BeZero())
-			name := nameString(taskStatus)
-			Expect(name).NotTo(BeEmpty())
-			fmt.Printf("%s: PID %d, TID %d, PPID %d\n",
-				name, taskStatus.Pid, taskStatus.Tid, taskStatus.Ppid)
+			Expect(taskStatus.Name()).NotTo(BeEmpty())
 			count++
 		}
 		Expect(count).NotTo(BeZero())
 	})
 
 })
-
-func nameString(taskStatus beesyProcstatus) string {
-	b := unsafe.Slice((*byte)(unsafe.Pointer(&taskStatus.Name)), unsafe.Sizeof(taskStatus.Name))
-	if idx := bytes.IndexByte(b, 0); idx >= 0 {
-		return string(b[:idx])
-	}
-	return string(b[:])
-}

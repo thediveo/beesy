@@ -96,30 +96,39 @@ void task_name(struct task_struct *task, char *buf, int len)
         if (kt != NULL) {
             const char *fn = BPF_CORE_READ(kt, full_name);
             if (fn != NULL) {
-                bpf_probe_read_kernel_str(buf, len-1, fn);
-                buf[len-1] = '\0';
-                return;
+                // according to
+                // https://docs.ebpf.io/linux/helper-function/bpf_probe_read_kernel_str
+                // we either end up with an always properly zero-terminated
+                // string in our buffer, or in an unlikely event with nothing
+                // copied at all.
+                int l = bpf_probe_read_kernel_str(buf, len, fn);
+                if (l >= 0) {
+                    return;
+                }
+                // fall back on using the "length-challenged" task->comm name if
+                // we can't retrieve the full name for some strange reason.
             }
         }
-        // otherwise fall through to the default task->comm name.
     }
+    // use the "length-challenged" task->comm name that is always present.
     if (len > TASK_COMM_LEN) {
         len = TASK_COMM_LEN;
     }
     bee_strncpy(buf, task->comm, len-1);
     buf[len-1] = '\0';
+    return;
 }
 
-// proc_status defines the binary representation of the per-task status
+// taskstatus defines the binary representation of the per-task status
 // information.
-struct procstatus {
+struct task_status {
     int  pid;
     int  tid;
     int  ppid;
-    char name[TASKFULLNAMELEN];
+    char fullname[TASKFULLNAMELEN];
 };
 
-const struct procstatus _meh __attribute__((unused)); // force emitting struct procstatus
+const struct task_status _meh __attribute__((unused)); // force emitting struct procstatus
 
 SEC("iter/task")
 int dump_task_status(struct bpf_iter__task *ctx)
@@ -130,11 +139,11 @@ int dump_task_status(struct bpf_iter__task *ctx)
         return 0;
     }
 
-    struct procstatus stat;
+    struct task_status stat;
     
     stat.pid = task->tgid,  // user-space PID <=> kernel-space tgid
     stat.tid = task->pid,   // user-space TID <=> kernel-space pid
-    task_name(task, stat.name, sizeof(stat.name));
+    task_name(task, stat.fullname, sizeof(stat.fullname));
 
     struct task_struct *parent = bpf_task_acquire(task->real_parent);
     if (parent != NULL) {
