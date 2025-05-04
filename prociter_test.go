@@ -15,14 +15,17 @@
 package beesy
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"time"
 	"unsafe"
 
+	"github.com/onsi/gomega/format"
+
 	"github.com/cilium/ebpf/link"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/format"
 	. "github.com/onsi/gomega/gleak"
 	. "github.com/thediveo/success"
 )
@@ -76,12 +79,21 @@ var _ = Describe("beesy eBPF", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(taskStatus.Pid).NotTo(BeZero())
 			Expect(taskStatus.Tid).NotTo(BeZero())
-			name := string(unsafe.Slice((*byte)(unsafe.Pointer(&taskStatus.Name)), unsafe.Sizeof(taskStatus.Name)))
+			name := nameString(taskStatus)
 			Expect(name).NotTo(BeEmpty())
-			println(name)
+			fmt.Printf("%s: PID %d, TID %d, PPID %d\n",
+				name, taskStatus.Pid, taskStatus.Tid, taskStatus.Ppid)
 			count++
 		}
 		Expect(count).NotTo(BeZero())
 	})
 
 })
+
+func nameString(taskStatus beesyProcstatus) string {
+	b := unsafe.Slice((*byte)(unsafe.Pointer(&taskStatus.Name)), unsafe.Sizeof(taskStatus.Name))
+	if idx := bytes.IndexByte(b, 0); idx >= 0 {
+		return string(b[:idx])
+	}
+	return string(b[:])
+}

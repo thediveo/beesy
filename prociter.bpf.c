@@ -6,8 +6,11 @@
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 // https://elixir.bootlin.com/linux/v6.12/source/tools/sched_ext/include/scx/common.bpf.h#L329
-void bpf_rcu_read_lock(void) __ksym;
-void bpf_rcu_read_unlock(void) __ksym;
+extern void bpf_rcu_read_lock(void) __ksym;
+extern void bpf_rcu_read_unlock(void) __ksym;
+
+extern struct task_struct *bpf_task_acquire(struct task_struct *p) __ksym;
+extern void bpf_task_release(struct task_struct *p) __ksym;
 
 // See:
 // - https://elixir.bootlin.com/linux/v6.12/source/include/linux/types.h#L27
@@ -27,6 +30,8 @@ struct task_struct {
 
     char comm[TASK_COMM_LEN];
     
+    struct task_struct *real_parent;
+
     unsigned int flags;
     void *worker_private;
 } __attribute__((preserve_access_index));
@@ -53,9 +58,15 @@ struct bpf_iter__task {
 // https://elixir.bootlin.com/linux/v6.14.5/source/fs/proc/array.c#L99
 #define TASKFULLNAMELEN 64
 
+/*
+ * bee_strncpy copies len byte-wide chars from *src to *dst, filling in zero
+ * chars when the end of src has been reached before len. This helper does not
+ * ensure a trailing zero byte, it is up to the caller to ensure such a zero
+ * byte terminator where necessary.
+ */
 void bee_strncpy(char *dst, const char *src, int len) {
     while (len) {
-        if (!(*dst = *src)) {
+        if ((*dst = *src) != 0) {
             src++;
         }
         dst++;
@@ -63,6 +74,17 @@ void bee_strncpy(char *dst, const char *src, int len) {
     }
 }
 
+/*
+ * task_name copies the name of the *task into the *buf of len, ensuring that
+ * the name is always properly zero byte terminated.
+ *
+ * Please note that task_name does not pad *buf with zeros, except for a single
+ * zero byte char right at the end of the task name.
+ *
+ * This is not your average strncpy(buf, task->name, 15) variant, but instead it
+ * correctly handles kthread "full names" that can be up to 63 chars long (and
+ * with an additional trailing zero byte char in tow).
+ */
 void task_name(struct task_struct *task, char *buf, int len)
 {
     if (len < 1) { // pacify the verify
@@ -74,7 +96,7 @@ void task_name(struct task_struct *task, char *buf, int len)
         if (kt != NULL) {
             const char *fn = BPF_CORE_READ(kt, full_name);
             if (fn != NULL) {
-                bpf_core_read_str(buf, len-1, fn);
+                bpf_probe_read_kernel_str(buf, len-1, fn);
                 buf[len-1] = '\0';
                 return;
             }
@@ -93,6 +115,7 @@ void task_name(struct task_struct *task, char *buf, int len)
 struct procstatus {
     int  pid;
     int  tid;
+    int  ppid;
     char name[TASKFULLNAMELEN];
 };
 
@@ -109,11 +132,17 @@ int dump_task_status(struct bpf_iter__task *ctx)
 
     struct procstatus stat;
     
-    bpf_rcu_read_lock();
     stat.pid = task->tgid,  // user-space PID <=> kernel-space tgid
     stat.tid = task->pid,   // user-space TID <=> kernel-space pid
     task_name(task, stat.name, sizeof(stat.name));
-    bpf_rcu_read_unlock();
+
+    struct task_struct *parent = bpf_task_acquire(task->real_parent);
+    if (parent != NULL) {
+        stat.ppid = parent->tgid;
+        bpf_task_release(parent);
+    } else {
+        stat.ppid = 0;
+    }
 
     bpf_seq_write(m, &stat, sizeof(stat));
 
