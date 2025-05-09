@@ -20,29 +20,6 @@ import (
 	"github.com/thediveo/beesy/beesy/internal/linuxkernel-assertions/rootpidns/pidlistercmd/format"
 )
 
-// Name returns beeTaskInfo.Fullname as a proper string instead of a fixed-size
-// array, terminating the string at the first zero byte encountered in the
-// array.
-func (ti *beeTaskInfo) Name() string {
-	b := unsafe.Slice((*byte)(unsafe.Pointer(&ti.Fullname[0])), unsafe.Sizeof(ti.Fullname))
-	// note that the fullname char array isn't zero padded, so we cannot use the
-	// usual TrimRight and Co., but instead stop dead at the first zero byte.
-	if idx := bytes.IndexByte(b, 0); idx >= 0 {
-		return strings.Clone(string(b[:idx]))
-	}
-	return strings.Clone(string(b[:]))
-}
-
-func (ti *beeTaskInfo) CallerName() string {
-	b := unsafe.Slice((*byte)(unsafe.Pointer(&ti.Callername[0])), unsafe.Sizeof(ti.Callername))
-	// note that the fullname char array isn't zero padded, so we cannot use the
-	// usual TrimRight and Co., but instead stop dead at the first zero byte.
-	if idx := bytes.IndexByte(b, 0); idx >= 0 {
-		return strings.Clone(string(b[:idx]))
-	}
-	return strings.Clone(string(b[:]))
-}
-
 func main() {
 	var objs beeObjects
 	err := loadBeeObjects(&objs, nil)
@@ -80,4 +57,30 @@ func main() {
 		}
 		fmt.Printf("%s\n", data)
 	}
+}
+
+// Name returns beeTaskInfo.Fullname as a proper string instead of a fixed-size
+// array, terminating the string at the first zero byte encountered in the
+// array.
+func (ti *beeTaskInfo) Name() string {
+	b := unsafe.Slice((*byte)(unsafe.Pointer(&ti.Fullname[0])), unsafe.Sizeof(ti.Fullname))
+	// note that the fullname char array isn't zero padded, so we cannot use the
+	// usual TrimRight and Co., but instead stop dead at the first zero byte.
+	if idx := bytes.IndexByte(b, 0); idx >= 0 {
+		return strings.Clone(string(b[:idx]))
+	}
+	return strings.Clone(string(b[:]))
+}
+
+// CallerName returns beeTaskInfo.Callername as a proper string instead of a
+// fixed-size array, terminating the string at the first zero byte encountered
+// in the array.
+func (ti *beeTaskInfo) CallerName() string {
+	b := unsafe.Slice((*byte)(unsafe.Pointer(&ti.Callername[0])), unsafe.Sizeof(ti.Callername))
+	// note that the fullname char array isn't zero padded, so we cannot use the
+	// usual TrimRight and Co., but instead stop dead at the first zero byte.
+	if idx := bytes.IndexByte(b, 0); idx >= 0 {
+		return strings.Clone(string(b[:idx]))
+	}
+	return strings.Clone(string(b[:]))
 }

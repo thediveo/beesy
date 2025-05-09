@@ -14,6 +14,7 @@
 
 package format
 
+// Output defines the JSON output of the pidlister command.
 type Output struct {
 	PID      int32  `json:"pid"`
 	LocalPID int32  `json:"local-pid"`
