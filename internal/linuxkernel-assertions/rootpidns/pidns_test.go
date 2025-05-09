@@ -25,6 +25,7 @@ import (
 	"github.com/thediveo/beesy/beesy/tasks"
 	"golang.org/x/sys/unix"
 
+	gof "github.com/onsi/gomega/format"
 	"github.com/onsi/gomega/gexec"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -47,6 +48,8 @@ var _ = Describe("iterating tasks inside a child PID namespace", Ordered, func()
 			Skip("needs root")
 		}
 
+		gof.MaxLength = 8192
+
 		canaryPath = Successful(gexec.Build("./pidlistercmd", "-buildvcs=false"))
 		DeferCleanup(func() {
 			gexec.CleanupBuildArtifacts()
@@ -54,8 +57,6 @@ var _ = Describe("iterating tasks inside a child PID namespace", Ordered, func()
 	})
 
 	It("sees only tasks inside its PID namespace with host PIDs", func() {
-		expectedName := `"` + cmdcomm + `"`
-
 		cmd := exec.Command(canaryPath)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			Cloneflags: unix.CLONE_NEWPID,
@@ -71,10 +72,14 @@ var _ = Describe("iterating tasks inside a child PID namespace", Ordered, func()
 			var data format.Output
 			Expect(json.Unmarshal([]byte(line), &data)).To(Succeed())
 
-			Expect(data.Name).To(Equal(expectedName))
-			Expect(data.Caller).To(Equal(expectedName))
+			Expect(data.Name).To(Equal(cmdcomm))
+			Expect(data.Caller).To(Equal(cmdcomm))
 
 			Expect(data.PID).NotTo(Equal(int32(1)))
+			Expect(data.LocalPID).To(Equal(int32(1)))
+
+			Expect(data.TID).NotTo(BeZero())
+			Expect(data.LocalTID).NotTo(BeZero())
 		}
 		Expect(lines).NotTo(BeZero())
 	})

@@ -35,11 +35,12 @@ struct pid {
 struct task_struct {
     pid_t pid;
     pid_t tgid;
-    struct pid *thread_pid;
-
+    
     char comm[TASK_COMM_LEN];
     
+    struct task_struct *group_leader;
     struct task_struct *real_parent;
+    struct pid *thread_pid;
 
     unsigned int flags;
     void *worker_private;

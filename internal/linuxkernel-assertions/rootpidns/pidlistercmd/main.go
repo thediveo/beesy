@@ -67,10 +67,12 @@ func main() {
 			os.Exit(1)
 		}
 		data, err := json.Marshal(format.Output{
-			PID:    taskInfo.Pid,
-			TID:    taskInfo.Tid,
-			Name:   taskInfo.Name(),
-			Caller: taskInfo.CallerName(),
+			PID:      taskInfo.Pid,
+			LocalPID: taskInfo.LocalPid,
+			TID:      taskInfo.Tid,
+			LocalTID: taskInfo.LocalTid,
+			Name:     taskInfo.Name(),
+			Caller:   taskInfo.CallerName(),
 		})
 		if err != nil {
 			slog.Error("cannot marshal task information", slog.String("error", err.Error()))

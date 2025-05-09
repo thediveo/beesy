@@ -2,6 +2,7 @@
 
 #include "iter.h"
 #include "strncpy.h"
+#include "tid_current_pidns.h"
 #include "bpf_core_read.h"
 
 char __license[] SEC("license") = "GPL";
@@ -16,8 +17,10 @@ extern void bpf_task_release(struct task_struct *p) __ksym;
 // task_info defines the binary representation of the per-task information we
 // are going to send to user space when iterating over tasks.
 struct task_info {
-    int  pid;
-    int  tid;
+    int  pid; // user-space PID in initial PID namespace
+    int  local_pid;
+    int  tid; // user-space TID in initial PID namespace
+    int  local_tid; // user-space TID as seen from caller's PID namespace
     char fullname[TASK_COMM_LEN];
     char callername[TASK_COMM_LEN];
 };
@@ -38,9 +41,13 @@ int dump_task_info(struct bpf_iter__task *ctx)
     struct task_info stat;
     stat.pid = task->tgid,  // user-space PID <=> kernel-space tgid
     stat.tid = task->pid,   // user-space TID <=> kernel-space pid
+    
     bee_strncpy(stat.fullname, task->comm, TASK_COMM_LEN-1);
     stat.fullname[TASK_COMM_LEN-1] = '\0';
     bpf_get_current_comm(stat.callername, TASK_COMM_LEN);
+
+    stat.local_pid = tid_current_pidns(task->group_leader);
+    stat.local_tid = tid_current_pidns(task);
 
     bpf_seq_write(m, &stat, sizeof(stat));
 

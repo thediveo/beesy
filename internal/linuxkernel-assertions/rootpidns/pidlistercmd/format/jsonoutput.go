@@ -15,8 +15,10 @@
 package format
 
 type Output struct {
-	PID    int32  `json:"pid"`
-	TID    int32  `json:"tid"`
-	Name   string `json:"name"`
-	Caller string `json:"caller"`
+	PID      int32  `json:"pid"`
+	LocalPID int32  `json:"local-pid"`
+	TID      int32  `json:"tid"`
+	LocalTID int32  `json:"local-tid"`
+	Name     string `json:"name"`
+	Caller   string `json:"caller"`
 }
