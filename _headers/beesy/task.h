@@ -6,7 +6,24 @@
 // See:
 // - https://elixir.bootlin.com/linux/v6.12/source/include/linux/types.h#L27
 // - https://elixir.bootlin.com/linux/v6.12/source/include/uapi/asm-generic/posix_types.h#L28
-typedef int pid_t; 
+typedef int pid_t;
+
+// https://elixir.bootlin.com/linux/v6.14.4/source/include/linux/pid_namespace.h#L26
+struct pid_namespace {
+    unsigned int level;
+} __attribute__((preserve_access_index));
+
+// https://elixir.bootlin.com/linux/v6.14.4/source/include/linux/pid.h#L50
+struct upid {
+    int nr;
+    struct pid_namespace *ns;
+} __attribute__((preserve_access_index));
+
+// https://elixir.bootlin.com/linux/v6.14.4/source/include/linux/pid.h#L55
+struct pid {
+    unsigned int level;
+    struct upid numbers[];
+} __attribute__((preserve_access_index));
 
 // https://elixir.bootlin.com/linux/v6.14.4/source/include/linux/sched.h#L307
 #define TASK_COMM_LEN 16
@@ -18,6 +35,7 @@ typedef int pid_t;
 struct task_struct {
     pid_t pid;
     pid_t tgid;
+    struct pid *thread_pid;
 
     char comm[TASK_COMM_LEN];
     

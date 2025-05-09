@@ -12,15 +12,17 @@
 // License for the specific language governing permissions and limitations
 // under the License.
 
-package pidns
+package rootpidns
 
 import (
-	"fmt"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
 
+	"github.com/thediveo/beesy/beesy/internal/linuxkernel-assertions/rootpidns/pidlistercmd/format"
+	"github.com/thediveo/beesy/beesy/tasks"
 	"golang.org/x/sys/unix"
 
 	"github.com/onsi/gomega/gexec"
@@ -29,6 +31,12 @@ import (
 	. "github.com/onsi/gomega"
 	. "github.com/thediveo/success"
 )
+
+// cmdpkg specifies the name (but not the import path) of the direct sub-package
+// containing the task PID listing command.
+const cmdpkg = "pidlistercmd"
+
+var cmdcomm = cmdpkg[:min(len(cmdpkg), tasks.MaxCommLen)]
 
 var _ = Describe("iterating tasks inside a child PID namespace", Ordered, func() {
 
@@ -39,28 +47,34 @@ var _ = Describe("iterating tasks inside a child PID namespace", Ordered, func()
 			Skip("needs root")
 		}
 
-		canaryPath = Successful(gexec.Build("./main", "-buildvcs=false"))
+		canaryPath = Successful(gexec.Build("./pidlistercmd", "-buildvcs=false"))
 		DeferCleanup(func() {
 			gexec.CleanupBuildArtifacts()
 		})
 	})
 
-	It("sees only tasks inside its PID namespace", func() {
+	It("sees only tasks inside its PID namespace with host PIDs", func() {
+		expectedName := `"` + cmdcomm + `"`
+
 		cmd := exec.Command(canaryPath)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			Cloneflags: unix.CLONE_NEWPID,
 		}
 		session := Successful(gexec.Start(cmd, GinkgoWriter, GinkgoWriter))
+
 		lines := 0
 		for line := range strings.SplitSeq(string(session.Wait().Out.Contents()), "\n") {
 			if line == "" {
 				break
 			}
 			lines++
-			fmt.Printf("%q\n", line)
-			fields := strings.SplitN(line, " ", 3)
-			Expect(fields).To(HaveLen(3))
-			Expect(fields[2]).To(Equal(`"main"`))
+			var data format.Output
+			Expect(json.Unmarshal([]byte(line), &data)).To(Succeed())
+
+			Expect(data.Name).To(Equal(expectedName))
+			Expect(data.Caller).To(Equal(expectedName))
+
+			Expect(data.PID).NotTo(Equal(int32(1)))
 		}
 		Expect(lines).NotTo(BeZero())
 	})

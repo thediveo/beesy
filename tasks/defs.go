@@ -12,16 +12,13 @@
 // License for the specific language governing permissions and limitations
 // under the License.
 
-package pidns
+package tasks
 
-import (
-	"testing"
+// CommSize is the size in bytes of the “comm” field in the Linux kernel task
+// structures, including a mandatory final zero byte.
+const CommSize = 16
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-)
-
-func TestPidns(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "internal/linuxkernel-assertions/pidns")
-}
+// MaxCommLen is the effective maximal length of a task name in the “comm”
+// field, as there must always be a terminating zero byte which we don't count
+// into the name length.
+const MaxCommLen = CommSize - 1

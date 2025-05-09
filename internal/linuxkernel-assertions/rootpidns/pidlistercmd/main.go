@@ -8,6 +8,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/cilium/ebpf/link"
 	"github.com/thediveo/beesy/beesy/internal/iteriter"
+	"github.com/thediveo/beesy/beesy/internal/linuxkernel-assertions/rootpidns/pidlistercmd/format"
 )
 
 // Name returns beeTaskInfo.Fullname as a proper string instead of a fixed-size
@@ -23,6 +25,16 @@ import (
 // array.
 func (ti *beeTaskInfo) Name() string {
 	b := unsafe.Slice((*byte)(unsafe.Pointer(&ti.Fullname[0])), unsafe.Sizeof(ti.Fullname))
+	// note that the fullname char array isn't zero padded, so we cannot use the
+	// usual TrimRight and Co., but instead stop dead at the first zero byte.
+	if idx := bytes.IndexByte(b, 0); idx >= 0 {
+		return strings.Clone(string(b[:idx]))
+	}
+	return strings.Clone(string(b[:]))
+}
+
+func (ti *beeTaskInfo) CallerName() string {
+	b := unsafe.Slice((*byte)(unsafe.Pointer(&ti.Callername[0])), unsafe.Sizeof(ti.Callername))
 	// note that the fullname char array isn't zero padded, so we cannot use the
 	// usual TrimRight and Co., but instead stop dead at the first zero byte.
 	if idx := bytes.IndexByte(b, 0); idx >= 0 {
@@ -54,6 +66,16 @@ func main() {
 			slog.Error("eBPF iteration failed", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
-		fmt.Printf("%d %d %q\n", taskInfo.Pid, taskInfo.Tid, taskInfo.Name())
+		data, err := json.Marshal(format.Output{
+			PID:    taskInfo.Pid,
+			TID:    taskInfo.Tid,
+			Name:   taskInfo.Name(),
+			Caller: taskInfo.CallerName(),
+		})
+		if err != nil {
+			slog.Error("cannot marshal task information", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		fmt.Printf("%s\n", data)
 	}
 }

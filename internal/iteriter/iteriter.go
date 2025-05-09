@@ -22,6 +22,12 @@ import (
 	"github.com/cilium/ebpf/link"
 )
 
+const (
+	BPF_TASK_ITER_ALL_PROCS    = 0
+	BPF_TASK_ITER_ALL_THREADS  = 1
+	BPF_TASK_ITER_PROC_THREADS = 2
+)
+
 // All returns in an iterator over the elements of the eBPF iterator it. In case
 // of an iterator failure, the iterator will return a zero element together with
 // an error and then end the sequence. The iterator will never emit io.EOF as

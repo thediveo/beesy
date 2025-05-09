@@ -18,11 +18,14 @@ extern void bpf_task_release(struct task_struct *p) __ksym;
 struct task_info {
     int  pid;
     int  tid;
-    char fullname[TASKFULLNAMELEN];
+    char fullname[TASK_COMM_LEN];
+    char callername[TASK_COMM_LEN];
 };
 
 const struct task_info _meh __attribute__((unused)); // force emitting struct procstatus
 
+// the "iterator" program that gets called on each iteration of an eBPF task
+// iterator.
 SEC("iter/task")
 int dump_task_info(struct bpf_iter__task *ctx)
 {
@@ -37,6 +40,7 @@ int dump_task_info(struct bpf_iter__task *ctx)
     stat.tid = task->pid,   // user-space TID <=> kernel-space pid
     bee_strncpy(stat.fullname, task->comm, TASK_COMM_LEN-1);
     stat.fullname[TASK_COMM_LEN-1] = '\0';
+    bpf_get_current_comm(stat.callername, TASK_COMM_LEN);
 
     bpf_seq_write(m, &stat, sizeof(stat));
 
