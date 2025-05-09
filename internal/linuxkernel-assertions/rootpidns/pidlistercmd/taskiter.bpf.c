@@ -1,5 +1,9 @@
 //go:build ignore
 
+// Note: This file is licenced differently from the rest of the project
+// SPDX-License-Identifier: GPL-2.0
+// Copyright (c) TheDiveO
+
 #include "iter.h"
 #include "strncpy.h"
 #include "tid_current_pidns.h"
@@ -10,9 +14,6 @@ char __license[] SEC("license") = "GPL";
 // https://elixir.bootlin.com/linux/v6.12/source/tools/sched_ext/include/scx/common.bpf.h#L329
 extern void bpf_rcu_read_lock(void) __ksym;
 extern void bpf_rcu_read_unlock(void) __ksym;
-
-extern struct task_struct *bpf_task_acquire(struct task_struct *p) __ksym;
-extern void bpf_task_release(struct task_struct *p) __ksym;
 
 // task_info defines the binary representation of the per-task information we
 // are going to send to user space when iterating over tasks.
@@ -46,7 +47,13 @@ int dump_task_info(struct bpf_iter__task *ctx)
     stat.fullname[TASK_COMM_LEN-1] = '\0';
     bpf_get_current_comm(stat.callername, TASK_COMM_LEN);
 
-    stat.local_pid = tid_current_pidns(task->group_leader);
+    struct task_struct *grp_leader = bpf_task_acquire(task->group_leader);
+    if (grp_leader != NULL) {
+        stat.local_pid = tid_current_pidns(grp_leader);
+        bpf_task_release(grp_leader);
+    } else {
+        stat.local_pid = 0;
+    }
     stat.local_tid = tid_current_pidns(task);
 
     bpf_seq_write(m, &stat, sizeof(stat));

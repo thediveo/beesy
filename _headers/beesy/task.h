@@ -55,4 +55,7 @@ struct kthread {
 // https://elixir.bootlin.com/linux/v6.14.5/source/fs/proc/array.c#L99
 #define TASKFULLNAMELEN 64
 
+extern struct task_struct *bpf_task_acquire(struct task_struct *p) __ksym;
+extern void bpf_task_release(struct task_struct *p) __ksym;
+
 #endif
