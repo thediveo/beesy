@@ -1,0 +1,68 @@
+// Copyright 2025 Harald Albrecht.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not
+// use this file except in compliance with the License. You may obtain a copy
+// of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+// WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+// License for the specific language governing permissions and limitations
+// under the License.
+
+package pidns
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+	"syscall"
+
+	"golang.org/x/sys/unix"
+
+	"github.com/onsi/gomega/gexec"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	. "github.com/thediveo/success"
+)
+
+var _ = Describe("iterating tasks inside a child PID namespace", Ordered, func() {
+
+	var canaryPath string
+
+	BeforeAll(func() {
+		if os.Getuid() != 0 {
+			Skip("needs root")
+		}
+
+		canaryPath = Successful(gexec.Build("./main", "-buildvcs=false"))
+		DeferCleanup(func() {
+			gexec.CleanupBuildArtifacts()
+		})
+	})
+
+	It("sees only tasks inside its PID namespace", func() {
+		cmd := exec.Command(canaryPath)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Cloneflags: unix.CLONE_NEWPID,
+		}
+		session := Successful(gexec.Start(cmd, GinkgoWriter, GinkgoWriter))
+		lines := 0
+		for line := range strings.SplitSeq(string(session.Wait().Out.Contents()), "\n") {
+			if line == "" {
+				break
+			}
+			lines++
+			fmt.Printf("%q\n", line)
+			fields := strings.SplitN(line, " ", 3)
+			Expect(fields).To(HaveLen(3))
+			Expect(fields[2]).To(Equal(`"main"`))
+		}
+		Expect(lines).NotTo(BeZero())
+	})
+
+})

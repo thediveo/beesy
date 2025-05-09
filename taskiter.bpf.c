@@ -121,14 +121,14 @@ void task_name(struct task_struct *task, char *buf, int len)
 
 // taskstatus defines the binary representation of the per-task status
 // information.
-struct task_status {
+struct task_info {
     int  pid;
     int  tid;
     int  ppid;
     char fullname[TASKFULLNAMELEN];
 };
 
-const struct task_status _meh __attribute__((unused)); // force emitting struct procstatus
+const struct task_info _meh __attribute__((unused)); // force emitting struct procstatus
 
 SEC("iter/task")
 int dump_task_status(struct bpf_iter__task *ctx)
@@ -139,7 +139,7 @@ int dump_task_status(struct bpf_iter__task *ctx)
         return 0;
     }
 
-    struct task_status stat;
+    struct task_info stat;
     
     stat.pid = task->tgid,  // user-space PID <=> kernel-space tgid
     stat.tid = task->pid,   // user-space TID <=> kernel-space pid
