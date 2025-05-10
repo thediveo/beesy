@@ -21,8 +21,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/thediveo/beesy/beesy/internal/linuxkernel-assertions/rootpidns/pidlistercmd/format"
-	"github.com/thediveo/beesy/beesy/tasks"
+	"github.com/thediveo/beesy/internal/linuxkernel-assertions/rootpidns/pidlistercmd/format"
+	"github.com/thediveo/beesy/tasks"
 	"golang.org/x/sys/unix"
 
 	gof "github.com/onsi/gomega/format"

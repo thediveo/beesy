@@ -16,8 +16,8 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/link"
-	"github.com/thediveo/beesy/beesy/internal/iteriter"
-	"github.com/thediveo/beesy/beesy/internal/linuxkernel-assertions/rootpidns/pidlistercmd/format"
+	"github.com/thediveo/beesy/internal/iteriter"
+	"github.com/thediveo/beesy/internal/linuxkernel-assertions/rootpidns/pidlistercmd/format"
 )
 
 func main() {

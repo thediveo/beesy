@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"bpf_core_read.h": "c",
+			"typeinfo": "c",
+			"text_encoding": "c"
+		}
+	}
+}
