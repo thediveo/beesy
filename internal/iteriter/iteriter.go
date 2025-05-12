@@ -28,10 +28,14 @@ const (
 	BPF_TASK_ITER_PROC_THREADS = 2
 )
 
-// All returns in an iterator over the elements of the eBPF iterator it. In case
-// of an iterator failure, the iterator will return a zero element together with
-// an error and then end the sequence. The iterator will never emit io.EOF as
-// this would be pretty useless for an iterator.
+// All returns an iterator over the elements of the eBPF iterator passed as
+// “it”. In case of an iterator failure, the iterator will return a zero element
+// together with an error and then end the sequence. The iterator will never
+// emit io.EOF as this would be pretty useless for an iterator.
+//
+// All returns the iterator results as values and not as references; please see
+// [AllVolatile] for an optimized version that passed values by reference and
+// with the values only valid within the caller's iteration body.
 func All[T any](it *link.Iter) iter.Seq2[T, error] {
 	return func(yield func(T, error) bool) {
 		f, err := it.Open()
@@ -48,6 +52,8 @@ func All[T any](it *link.Iter) iter.Seq2[T, error] {
 				// without any error indication.
 				return
 			}
+			// Push either a v with a nil error, or alternatively a zero v with
+			// a non-nil error...
 			if !yield(v, err) {
 				return
 			}
@@ -68,10 +74,54 @@ func new[T any](f io.Reader) (v T, err error) {
 	// returned. However, we consider an incomplete read to be at EOF, otherwise
 	// returning the particular reading error encountered.
 	if uintptr(n) != unsafe.Sizeof(v) {
+		var zero T
 		if err != nil {
-			return v, err
+			return zero, err
 		}
-		return v, io.EOF
+		return zero, io.EOF
 	}
+	// We got here because we could read the whole value; at this point, we
+	// pointedly ignore any io.EOF as we will deliver it only on the next
+	// attempt (if any) to read the next iterator value.
 	return v, nil
+}
+
+// AllVolatile returns an iterator over the elements of the eBPF iterator passed
+// as “it”. In case of an iterator failure, the iterator will return a zero
+// element together with an error and then end the sequence. The iterator will
+// never emit io.EOF as this would be pretty useless for an iterator.
+//
+// AllVolatile returns a reference to the current value instead of a (copy of)
+// the current value itself. This reference is only valid within the caller's
+// iteration body and the reference and value referenced become invalid after
+// returning from the iteration body. If an iteration body needs to keep yielded
+// values for longer, they must create (shallow) copies themselves.
+func AllVolatile[T any](it *link.Iter) iter.Seq2[*T, error] {
+	return func(yield func(*T, error) bool) {
+		var zero T
+		f, err := it.Open()
+		if err != nil {
+			yield(&zero, err)
+			return
+		}
+		defer f.Close()
+		var v T
+		for {
+			n, err := f.Read(unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v)))
+			// as per the io.Reader contract, callers should consider the returned
+			// amount of bytes read first before looking at any error additionally
+			// returned. However, we consider an incomplete read to be at EOF, otherwise
+			// returning the particular reading error encountered.
+			if uintptr(n) != unsafe.Sizeof(v) {
+				if err != nil {
+					yield(&zero, err)
+					return
+				}
+				return
+			}
+			if !yield(&v, err) {
+				return
+			}
+		}
+	}
 }

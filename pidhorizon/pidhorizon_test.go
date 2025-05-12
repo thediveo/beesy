@@ -15,8 +15,14 @@
 package pidhorizon
 
 import (
+	"os"
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gleak"
+	. "github.com/thediveo/fdooze"
+	. "github.com/thediveo/success"
 )
 
 var _ = Describe("PID horizons", func() {
@@ -31,6 +37,37 @@ var _ = Describe("PID horizons", func() {
 		Expect(rootToLocal).To(And(
 			HaveKeyWithValue(uint32(42), uint32(1)),
 			HaveKeyWithValue(uint32(741), uint32(555))))
+	})
+
+	Context("ebpf", func() {
+
+		BeforeEach(func() {
+			if os.Getuid() != 0 {
+				Skip("needs root")
+			}
+
+			goodgos := Goroutines()
+			goodfds := Filedescriptors()
+			Eventually(Goroutines).Within(2 * time.Second).ProbeEvery(10 * time.Millisecond).
+				ShouldNot(HaveLeaked(goodgos))
+			Expect(Filedescriptors()).NotTo(HaveLeakedFds(goodfds))
+		})
+
+		It("loads the iterator successfully, then correctly releases its resources", func() {
+			ph := Successful(NewPIDHorizon[int]())
+			Expect(ph).NotTo(BeNil())
+			defer ph.Close()
+		})
+
+		It("discovers the TID mapping", func() {
+			ph := Successful(NewPIDHorizon[int]())
+			defer ph.Close()
+			beyond := ph.NewMapping()
+			Expect(beyond).NotTo(BeEmpty())
+			Expect(beyond).To(HaveKeyWithValue(os.Getpid(), Not(BeZero())))
+			Expect(beyond).To(HaveKeyWithValue(int(1), Not(BeZero())), "missing PID 1 (either real PID 1 or local PID 1)")
+		})
+
 	})
 
 })

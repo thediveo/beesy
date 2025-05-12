@@ -17,23 +17,72 @@
 package pidhorizon
 
 import (
+	"fmt"
 	"maps"
 
+	"github.com/cilium/ebpf/link"
 	"github.com/thediveo/beesy/constraints"
+	"github.com/thediveo/beesy/internal/iteriter"
 )
 
-// Mapper maps PIDs/TIDs in a (child) PID namespace one-to-one to their
+// Mapping maps PIDs/TIDs in a (child) PID namespace one-to-one to their
 // PIDs/TIDs in the root PID namespace (as seen by the kernel) or vice versa.
 //
 // See also: [Reverse].
-type Mapper[P constraints.PID] map[P]P
+type Mapping[P constraints.PID] map[P]P
 
-// Reverse returns a new PID/TID-to-PID/TID Mapper with the PID/TID mapping
-// reversed from m.
-func Reverse[P constraints.PID](m Mapper[P]) Mapper[P] {
-	r := make(Mapper[P])
+// Reverse returns a new, reversed PID/TID-to-PID/TID Mapping for m.
+func Reverse[P constraints.PID](m Mapping[P]) Mapping[P] {
+	r := make(Mapping[P])
 	for fromPID, toPID := range maps.All(m) {
 		r[toPID] = fromPID
 	}
 	return r
+}
+
+// NewPIDHorizon returns a new PID horizon for mapping PIDs/TIDs of any type
+// satisfying constraints.PID to their PIDs/TIDs in the root PID namespace. Use
+// [NewPIDHorizon.NewMapping]
+func NewPIDHorizon[P constraints.PID]() (*PIDHorizon[P], error) {
+	ph := &PIDHorizon[P]{}
+	if err := loadTaskTidIterObjects(&ph.ebpfObjects, nil); err != nil {
+		return nil, fmt.Errorf("cannot load Task TID iterator eBPF objects, reason: %w", err)
+	}
+	var err error
+	if ph.taskTIDIter, err = link.AttachIter(link.IterOptions{
+		Program: ph.ebpfObjects.DumpTaskTid,
+	}); err != nil {
+		return nil, fmt.Errorf("cannot attach Task TID iterator, reason: %w", err)
+	}
+	return ph, nil
+}
+
+// PIDHorizon provides looking beyond your current PID namespace horizon to
+// learn about PIDs/TIDs of processes you see in the root PID namespace.
+// However, it doesn't allow you to see any other processes/tasks than those
+// that you can see from your current PID namespace.
+type PIDHorizon[P constraints.PID] struct {
+	ebpfObjects taskTidIterObjects
+	taskTIDIter *link.Iter
+}
+
+// Close releases all resources associated with this PIDHorizon.
+func (ph *PIDHorizon[P]) Close() {
+	if ph.taskTIDIter != nil {
+		ph.taskTIDIter.Close()
+	}
+	ph.ebpfObjects.Close()
+}
+
+// NewMapping returns a new PID/TID mapping from this process's PID namespace to
+// the root PID namespace for all processes/tasks visible to this process.
+func (ph *PIDHorizon[P]) NewMapping() Mapping[P] {
+	m := Mapping[P]{}
+	for taskinfo, err := range iteriter.AllVolatile[taskTidIterInfo](ph.taskTIDIter) {
+		if err != nil {
+			break
+		}
+		m[P(taskinfo.Tid)] = P(taskinfo.RootTid)
+	}
+	return m
 }
