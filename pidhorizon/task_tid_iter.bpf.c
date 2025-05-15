@@ -1,8 +1,9 @@
-//go:build ignore
+// SPDX-License-Identifier: GPL-2.0
 
 // Note: This file is licenced differently from the rest of the project
-// SPDX-License-Identifier: GPL-2.0
-// Copyright (c) TheDiveO
+// Copyright 2025 Harald Albrecht
+
+//go:build ignore
 
 #include "iter.h"
 #include "tid_current_pidns.h"
