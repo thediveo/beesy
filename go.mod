@@ -22,5 +22,5 @@ require (
 	github.com/onsi/gomega v1.37.0
 	github.com/thediveo/fdooze v0.3.2
 	github.com/thediveo/success v1.0.3
-	golang.org/x/sys v0.32.0
+	golang.org/x/sys v0.33.0
 )
