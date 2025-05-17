@@ -12,7 +12,7 @@
 // License for the specific language governing permissions and limitations
 // under the License.
 
-package rootpidns
+package rootpidns_test
 
 import (
 	"encoding/json"

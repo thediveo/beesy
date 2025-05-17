@@ -15,13 +15,15 @@
 package rootpidns_test
 
 import (
+	"os"
 	"testing"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
-func TestRootPidns(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "internal/linuxkernel-assertions/rootpidns")
+const canaryEnvVarName = "ROOTPIDNS_TEST_CANARY"
+const canaryEnvVarValue = "GO-GOPHER-GO"
+
+func TestRunInChildPidNamespace(t *testing.T) {
+	if os.Getenv(canaryEnvVarName) != canaryEnvVarValue {
+		t.SkipNow()
+	}
 }
