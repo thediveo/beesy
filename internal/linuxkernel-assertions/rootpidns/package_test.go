@@ -22,6 +22,10 @@ import (
 )
 
 func TestRootPidns(t *testing.T) {
+	// Do not rerun Ginkgo/Gomega tests upon re-execution.
+	if isDumpChildPidnsTasks() {
+		return
+	}
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "internal/linuxkernel-assertions/rootpidns")
 }

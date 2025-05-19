@@ -21,11 +21,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/thediveo/beesy/internal/linuxkernel-assertions/rootpidns/pidlistercmd/format"
-	"github.com/thediveo/beesy/tasks"
 	"golang.org/x/sys/unix"
 
-	gof "github.com/onsi/gomega/format"
 	"github.com/onsi/gomega/gexec"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -33,47 +30,54 @@ import (
 	. "github.com/thediveo/success"
 )
 
-// cmdpkg specifies the name (but not the import path) of the direct sub-package
-// containing the task PID listing command.
-const cmdpkg = "pidlistercmd"
-
-var cmdcomm = cmdpkg[:min(len(cmdpkg), tasks.MaxCommLen)]
+var logLinePrefix = strings.Repeat(" ", 4)
 
 var _ = Describe("iterating tasks inside a child PID namespace", Ordered, func() {
 
-	var canaryPath string
-
 	BeforeAll(func() {
 		if os.Getuid() != 0 {
-			Skip("needs root")
+			Skip("needs root in order to create a new child PID namespace")
 		}
-
-		gof.MaxLength = 8192
-
-		canaryPath = Successful(gexec.Build("./pidlistercmd", "-buildvcs=false"))
-		DeferCleanup(func() {
-			gexec.CleanupBuildArtifacts()
-		})
 	})
 
-	It("sees only tasks inside its PID namespace with host PIDs", func() {
-		cmd := exec.Command(canaryPath)
+	It("sees only tasks inside its PID namespace, but not any tasks in the parent PID namespace(s)", func() {
+		// At this point we need to run with sufficient privileges, that is,
+		// root. And in this situation we don't want to build a dedicated binary
+		// for running the eBPF iterator and printing its results: not least,
+		// this will fail in devcontainers where the Go toolchain isn't made
+		// available to root (which is a good idea). Thus we reuse our own
+		// binary to run the eBPF iterator and print the outcome...
+
+		By("running the eBPF iterator as a child test in a new PID child namespace")
+		cmd := exec.Command("/proc/self/exe", "-test.v")
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			Cloneflags: unix.CLONE_NEWPID,
 		}
+		cmd.Env = append(cmd.Environ(), canaryEnvVarName+"="+canaryEnvVarValue)
 		session := Successful(gexec.Start(cmd, GinkgoWriter, GinkgoWriter))
 
+		By("reading the child test's output, processing logging messages only")
 		lines := 0
 		for line := range strings.SplitSeq(string(session.Wait().Out.Contents()), "\n") {
+			// Parse the output of the test run in the child pid namespace.
 			if line == "" {
 				break
 			}
+			// skip anything that somehow belongs to go test's own output, but
+			// keep only logging output from the child test.
+			if !strings.HasPrefix(line, logLinePrefix) {
+				continue
+			}
+			_, line, ok := strings.Cut(line[4:], " ")
+			if !ok {
+				continue
+			}
 			lines++
-			var data format.Output
+			var data perTaskJsonInfo
 			Expect(json.Unmarshal([]byte(line), &data)).To(Succeed())
 
-			Expect(data.Name).To(Equal(cmdcomm))
-			Expect(data.Caller).To(Equal(cmdcomm))
+			Expect(data.Name).To(Equal("exe")) // ...because the test is run through /proc/self/exe
+			Expect(data.Caller).To(Equal("exe"))
 
 			Expect(data.PID).NotTo(Equal(int32(1)))
 			Expect(data.LocalPID).To(Equal(int32(1)))
@@ -81,7 +85,7 @@ var _ = Describe("iterating tasks inside a child PID namespace", Ordered, func()
 			Expect(data.TID).NotTo(BeZero())
 			Expect(data.LocalTID).NotTo(BeZero())
 		}
-		Expect(lines).NotTo(BeZero())
+		Expect(lines).NotTo(BeZero(), "missing JSON output line(s)")
 	})
 
 })
